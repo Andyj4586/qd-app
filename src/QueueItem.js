@@ -4,44 +4,52 @@ import PropTypes from 'prop-types';
 import './QueueItem.css'; // Import the CSS file
 
 const QueueItem = ({ item, markAsWatched }) => {
-  const [showDescription, setShowDescription] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const toggleDescription = () => {
-    setShowDescription(!showDescription);
+  // Toggle the expanded state
+  const toggleExpand = () => {
+    setIsExpanded((prev) => !prev);
   };
 
+  // Handle keyboard accessibility
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      toggleDescription();
+      toggleExpand();
     }
   };
 
   return (
     <div
-      className={`itemContainer ${showDescription ? 'active' : ''}`}
-      aria-live="polite"
+      className={`itemContainer ${isExpanded ? 'expanded' : ''}`}
+      onClick={toggleExpand}
+      onKeyPress={handleKeyPress}
+      role="button"
+      tabIndex="0"
+      aria-expanded={isExpanded}
+      aria-label={`${item.name} queue item`}
     >
       <h3 className="title">{item.name}</h3>
       <img
         src={item.poster || 'https://via.placeholder.com/150x225?text=No+Image'}
         alt={`${item.name} poster`}
         className="poster"
-        onClick={toggleDescription}
-        role="button"
-        aria-expanded={showDescription}
-        tabIndex="0"
-        onKeyPress={handleKeyPress}
       />
       <p className="service">{item.service}</p>
-      <p className={`description ${showDescription ? 'show' : ''}`}>
-        {item.description}
-      </p>
+      
+      {/* Description */}
+      {isExpanded && (
+        <p className="description">{item.description}</p>
+      )}
+
       <button
-        onClick={() => markAsWatched(item.id)}
-        className="watchButton"
-        aria-label={`Mark ${item.name} as watched`}
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent triggering the toggle
+          markAsWatched(item.id);
+        }}
+        className="removeButton"
+        aria-label={`Remove ${item.name} from queue`}
       >
-        Mark as Watched
+        Remove
       </button>
     </div>
   );

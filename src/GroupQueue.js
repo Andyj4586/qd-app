@@ -12,6 +12,18 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
   const [newItemName, setNewItemName] = useState('');
   const [newItemService, setNewItemService] = useState('');
   const [error, setError] = useState('');
+  const [groupName, setGroupName] = useState(''); // New state for group name
+
+  // Define the available streaming services
+  const streamingServices = [
+    'Netflix',
+    'Hulu',
+    'Disney+',
+    'AppleTV+',
+    'Paramount+',
+    'Max',
+    'Amazon Prime',
+  ];
 
   useEffect(() => {
     if (!groupId) {
@@ -24,9 +36,17 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
       groupDocRef,
       (docSnap) => {
         if (docSnap.exists()) {
-          setQueue(docSnap.data().queue || []);
+          const groupData = docSnap.data();
+          setQueue(Array.isArray(groupData.queue) ? groupData.queue : []);
+          setGroupName(groupData.name || 'Unknown Group'); // Set group name
+
+          if (!Array.isArray(groupData.queue)) {
+            console.warn(`Group ${groupId} has an invalid 'queue' field. Expected an array.`);
+          }
         } else {
           setError('Group does not exist.');
+          setQueue([]);
+          setGroupName('');
         }
       },
       (error) => {
@@ -109,29 +129,35 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
     }
   };
 
+  // Function to format the group name
+  const formatPossessive = (name) => {
+    if (!name) return "Group Q";
+    return `${name} Q`;
+  };
+
   // Filter out watched items
   const filteredQueue = queue.filter((item) => !watchedItems.includes(item.id));
 
   // Extract unique streaming services for filtering
-  const uniqueServices = [...new Set(filteredQueue.map((item) => item.service))].filter(
-    (service) => service
-  );
+  const uniqueServices = [
+    ...new Set(filteredQueue.map((item) => item.service))
+  ].filter((service) => service);
 
   // State for sorting and filtering
-  const [sortOption, setSortOption] = useState('dateDesc'); // Default: Newest first
-  const [filterService, setFilterService] = useState('all'); // Default: Show all services
+  const [sortOptionGroup, setSortOptionGroup] = useState('dateDesc'); // Default: Newest first
+  const [filterServiceGroup, setFilterServiceGroup] = useState('all'); // Default: Show all services
 
   // Create a derived queue based on sorting and filtering
   const displayedQueue = [...filteredQueue]
-    .filter((item) => filterService === 'all' || item.service === filterService)
+    .filter((item) => filterServiceGroup === 'all' || item.service === filterServiceGroup)
     .sort((a, b) => {
-      if (sortOption === 'dateAsc') {
+      if (sortOptionGroup === 'dateAsc') {
         return new Date(a.addedAt) - new Date(b.addedAt); // Oldest first
-      } else if (sortOption === 'dateDesc') {
+      } else if (sortOptionGroup === 'dateDesc') {
         return new Date(b.addedAt) - new Date(a.addedAt); // Newest first
-      } else if (sortOption === 'serviceAsc') {
+      } else if (sortOptionGroup === 'serviceAsc') {
         return a.service.localeCompare(b.service);
-      } else if (sortOption === 'serviceDesc') {
+      } else if (sortOptionGroup === 'serviceDesc') {
         return b.service.localeCompare(a.service);
       }
       return 0;
@@ -139,7 +165,7 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
 
   return (
     <div className="groupQueueContainer">
-      <h2>Shared Queue</h2>
+      <h2>{formatPossessive(groupName)}</h2> {/* Dynamic Header */}
       {error && <p className="error">{error}</p>}
       <form onSubmit={addSharedItem} className="form">
         <input
@@ -150,29 +176,35 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
           className="input"
           required
         />
-        <input
-          type="text"
-          placeholder="Service (e.g., Netflix, Hulu)"
+        {/* Streaming Service Dropdown */}
+        <select
           value={newItemService}
           onChange={(e) => setNewItemService(e.target.value)}
-          className="input"
+          className="selectInput"
           required
-        />
-        <button type="submit" className="button">
-          Add to Shared Queue
+        >
+          <option value="" disabled>Select a streaming service</option>
+          {streamingServices.map((serviceOption) => (
+            <option key={serviceOption} value={serviceOption}>
+              {serviceOption}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="addButton">
+          Add to Group Q
         </button>
       </form>
 
       {/* Sorting and Filtering Controls */}
       <div className="controlsContainer">
         <div className="control">
-          <label htmlFor="sort" className="label">
+          <label htmlFor="sortGroup" className="label">
             Sort By:
           </label>
           <select
-            id="sort"
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value)}
+            id="sortGroup"
+            value={sortOptionGroup}
+            onChange={(e) => setSortOptionGroup(e.target.value)}
             className="select"
           >
             <option value="dateDesc">Date Added (Newest)</option>
@@ -182,13 +214,13 @@ const GroupQueue = ({ groupId, markAsWatched }) => {
           </select>
         </div>
         <div className="control">
-          <label htmlFor="filter" className="label">
+          <label htmlFor="filterGroup" className="label">
             Filter By Service:
           </label>
           <select
-            id="filter"
-            value={filterService}
-            onChange={(e) => setFilterService(e.target.value)}
+            id="filterGroup"
+            value={filterServiceGroup}
+            onChange={(e) => setFilterServiceGroup(e.target.value)}
             className="select"
           >
             <option value="all">All Services</option>

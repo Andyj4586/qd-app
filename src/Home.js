@@ -14,10 +14,21 @@ function Home() {
   const [error, setError] = useState('');
   const [groups, setGroups] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
-  
+
   // State variables for sorting and filtering
   const [sortOption, setSortOption] = useState('dateDesc'); // Default: Newest first
   const [filterService, setFilterService] = useState('all'); // Default: Show all services
+
+  // Define the available streaming services
+  const streamingServices = [
+    'Netflix',
+    'Hulu',
+    'Disney+',
+    'AppleTV+',
+    'Paramount+',
+    'Max',
+    'Amazon Prime',
+  ];
 
   // Fetch the user's queue, watched items, and groups when the component mounts
   useEffect(() => {
@@ -140,73 +151,12 @@ function Home() {
 
   return (
     <div style={styles.container}>
-      <h1>Q'd</h1>
-      <h2>Your Queue</h2>
-      {error && <p style={styles.error}>{error}</p>}
-      <form onSubmit={addItem} style={styles.form}>
-        <input
-          type="text"
-          placeholder="Item Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={styles.input}
-          required
-        />
-        <input
-          type="text"
-          placeholder="Service (e.g., Netflix, Hulu)"
-          value={service}
-          onChange={(e) => setService(e.target.value)}
-          style={styles.input}
-          required
-        />
-        <button type="submit" style={styles.button}>
-          Add to Queue
-        </button>
-      </form>
+      {/* Centered Logo */}
+      <h1 style={styles.logo}>Q'd</h1>
 
-      {/* Sorting and Filtering Controls */}
-      <div style={styles.controlsContainer}>
-        <div style={styles.control}>
-          <label htmlFor="sort" style={styles.label}>Sort By:</label>
-          <select
-            id="sort"
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value)}
-            style={styles.select}
-          >
-            <option value="dateDesc">Date Added (Newest)</option>
-            <option value="dateAsc">Date Added (Oldest)</option>
-            <option value="serviceAsc">Streaming Service (A-Z)</option>
-            <option value="serviceDesc">Streaming Service (Z-A)</option>
-          </select>
-        </div>
-        <div style={styles.control}>
-          <label htmlFor="filter" style={styles.label}>Filter By Service:</label>
-          <select
-            id="filter"
-            value={filterService}
-            onChange={(e) => setFilterService(e.target.value)}
-            style={styles.select}
-          >
-            <option value="all">All Services</option>
-            {uniqueServices.map((service, index) => (
-              <option key={index} value={service}>{service}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Horizontally Scrollable Queue */}
-      <div style={styles.queueContainer}>
-        {displayedQueue.map((item) => (
-          <QueueItem key={item.id} item={item} markAsWatched={markAsWatched} />
-        ))}
-      </div>
-
-      {/* Group Selection */}
-      <div style={styles.groupSelection}>
-        <h2>Your Groups</h2>
+      {/* Group Qs Section */}
+      <div style={styles.groupQsContainer}>
+        <h2>Group Qs</h2>
         {groups.length > 0 ? (
           <select onChange={handleGroupSelect} value={selectedGroupId || ''} style={styles.select}>
             <option value="" disabled>Select a group</option>
@@ -217,26 +167,109 @@ function Home() {
         ) : (
           <p>You are not part of any groups. Create or join a group to share queues.</p>
         )}
+
+        {/* Render Group Queue component if a group is selected */}
+        {selectedGroupId && (
+          <GroupQueue groupId={selectedGroupId} markAsWatched={markAsWatched} />
+        )}
       </div>
 
-      {/* Render Group Queue component if a group is selected */}
-      {selectedGroupId && (
-        <GroupQueue groupId={selectedGroupId} markAsWatched={markAsWatched} />
-      )}
+      {/* My Q Section */}
+      <div style={styles.myQContainer}>
+        <h2>My Q</h2>
+        {error && <p style={styles.error}>{error}</p>}
+        <form onSubmit={addItem} style={styles.form}>
+          <input
+            type="text"
+            placeholder="Item Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={styles.input}
+            required
+          />
+          {/* Streaming Service Dropdown */}
+          <select
+            value={service}
+            onChange={(e) => setService(e.target.value)}
+            style={styles.selectInput}
+            required
+          >
+            <option value="" disabled>Select a streaming service</option>
+            {streamingServices.map((serviceOption) => (
+              <option key={serviceOption} value={serviceOption}>
+                {serviceOption}
+              </option>
+            ))}
+          </select>
+          <button type="submit" style={styles.addButton}>
+            Add to Q
+          </button>
+        </form>
+
+        {/* Sorting and Filtering Controls */}
+        <div style={styles.controlsContainer}>
+          <div style={styles.control}>
+            <label htmlFor="sort" style={styles.label}>Sort By:</label>
+            <select
+              id="sort"
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+              style={styles.select}
+            >
+              <option value="dateDesc">Date Added (Newest)</option>
+              <option value="dateAsc">Date Added (Oldest)</option>
+              <option value="serviceAsc">Streaming Service (A-Z)</option>
+              <option value="serviceDesc">Streaming Service (Z-A)</option>
+            </select>
+          </div>
+          <div style={styles.control}>
+            <label htmlFor="filter" style={styles.label}>Filter By Service:</label>
+            <select
+              id="filter"
+              value={filterService}
+              onChange={(e) => setFilterService(e.target.value)}
+              style={styles.select}
+            >
+              <option value="all">All Services</option>
+              {uniqueServices.map((service, index) => (
+                <option key={index} value={service}>{service}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Horizontally Scrollable Queue */}
+        <div style={styles.queueContainer}>
+          {displayedQueue.map((item) => (
+            <QueueItem key={item.id} item={item} markAsWatched={markAsWatched} />
+          ))}
+        </div>
+      </div>
     </div>
   );
-
 }
 
 // Shared styles
 const styles = {
   container: {
-    maxWidth: '800px',
+    maxWidth: '1000px',
     margin: '30px auto',
     padding: '20px',
     border: '1px solid #ddd',
     borderRadius: '5px',
     backgroundColor: '#fff',
+    fontFamily: 'Arial, sans-serif',
+  },
+  logo: {
+    textAlign: 'center', // Center the logo
+    fontSize: '36px',
+    marginBottom: '20px',
+  },
+  groupQsContainer: {
+    marginBottom: '40px', // Space between sections
+  },
+  myQContainer: {
+    marginTop: '20px',
   },
   form: {
     display: 'flex',
@@ -250,11 +283,24 @@ const styles = {
     border: '1px solid #ccc',
     fontSize: '16px',
   },
-  button: {
+  selectInput: {
+    padding: '10px',
+    marginBottom: '15px',
+    borderRadius: '3px',
+    border: '1px solid #ccc',
+    fontSize: '16px',
+    appearance: 'none',
+    backgroundColor: '#fff',
+    backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg width=\'10\' height=\'6\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0l5 6 5-6\' fill=\'%23007bff\'/%3E%3C/svg%3E")',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
+    backgroundSize: '10px 6px',
+  },
+  addButton: {
     padding: '10px',
     borderRadius: '3px',
     border: 'none',
-    backgroundColor: '#333',
+    backgroundColor: '#007bff', // Blue background
     color: '#fff',
     fontSize: '16px',
     cursor: 'pointer',
@@ -280,19 +326,26 @@ const styles = {
     borderRadius: '3px',
     border: '1px solid #ccc',
     fontSize: '14px',
+    appearance: 'none',
+    backgroundColor: '#fff',
+    backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg width=\'10\' height=\'6\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0l5 6 5-6\' fill=\'%23007bff\'/%3E%3C/svg%3E")',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
+    backgroundSize: '10px 6px',
   },
   queueContainer: {
     display: 'flex',
     overflowX: 'auto',
     paddingBottom: '10px',
+    gap: '15px', // Space between queue items
   },
   groupSelection: {
     marginTop: '30px',
   },
   error: {
     color: 'red',
+    marginBottom: '10px',
   },
-  // Additional styles for QueueItem are in QueueItem.js
 };
 
 export default Home;
