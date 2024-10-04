@@ -26,7 +26,7 @@ function Login() {
 
   return (
     <div className="container mt-5 p-4 border rounded bg-white text-center">
-      <h1 className="mb-4">Q'd</h1>
+      <h1 className="mb-4">Qd</h1>
       <h2>Login</h2>
       {error && <p style={styles.error}>{error}</p>}
       <form onSubmit={handleLogin} style={styles.form}>

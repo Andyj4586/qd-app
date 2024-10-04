@@ -52,11 +52,16 @@ function Home() {
 
           const groupsData = await Promise.all(groupPromises);
           setGroups(groupsData);
+
+          // Auto-select the first group if none is selected
+          if (groupsData.length > 0 && !selectedGroupId) {
+            setSelectedGroupId(groupsData[0].id);
+          }
         }
       });
       return unsubscribe;
     }
-  }, []);
+  }, [selectedGroupId]); // Added selectedGroupId to dependencies to prevent infinite loops
 
   // Add item to user's personal queue
   const addItem = async (e) => {
@@ -152,14 +157,13 @@ function Home() {
   return (
     <div style={styles.container}>
       {/* Centered Logo */}
-      <h1 style={styles.logo}>Q'd</h1>
+      <h1 style={styles.logo}>Qd</h1>
 
       {/* Group Qs Section */}
       <div style={styles.groupQsContainer}>
         <h2>Group Qs</h2>
         {groups.length > 0 ? (
-          <select onChange={handleGroupSelect} value={selectedGroupId || ''} style={styles.select}>
-            <option value="" disabled>Select a group</option>
+          <select onChange={handleGroupSelect} value={selectedGroupId || groups[0].id} style={styles.select}>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>{group.name}</option>
             ))}
@@ -338,6 +342,7 @@ const styles = {
     overflowX: 'auto',
     paddingBottom: '10px',
     gap: '15px', // Space between queue items
+    scrollbarWidth: 'none', // Firefox
   },
   groupSelection: {
     marginTop: '30px',
