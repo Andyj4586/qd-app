@@ -10,6 +10,10 @@ import Profile from './Profile';
 import CreateGroup from './CreateGroup';
 import JoinGroup from './JoinGroup';
 import GroupQueue from './GroupQueue';
+import ReactDOM from 'react-dom';
+import './global.css'; // Import global styles
+
+ReactDOM.render(<App />, document.getElementById('root'));
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

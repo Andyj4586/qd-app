@@ -2,23 +2,31 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { doc, updateDoc, arrayUnion, onSnapshot, getDoc } from 'firebase/firestore';
-import GroupQueue from './GroupQueue'; // Ensure GroupQueue is properly imported
+import GroupQueue from './GroupQueue';
+import axios from 'axios'; // Import Axios
+import QueueItem from './QueueItem'; // Import QueueItem component
 
 function Home() {
   const [queue, setQueue] = useState([]);
+  const [watchedQueueItems, setWatchedQueueItems] = useState([]); // New state for watched items
   const [name, setName] = useState('');
   const [service, setService] = useState('');
   const [error, setError] = useState('');
   const [groups, setGroups] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
+  
+  // State variables for sorting and filtering
+  const [sortOption, setSortOption] = useState('dateDesc'); // Default: Newest first
+  const [filterService, setFilterService] = useState('all'); // Default: Show all services
 
-  // Fetch the user's queue and groups when the component mounts
+  // Fetch the user's queue, watched items, and groups when the component mounts
   useEffect(() => {
     if (auth.currentUser) {
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
       const unsubscribe = onSnapshot(userDocRef, async (docSnap) => {
         if (docSnap.exists()) {
           setQueue(docSnap.data().queue || []);
+          setWatchedQueueItems(docSnap.data().watchedQueueItems || []); // Fetch watched items
           const userGroups = docSnap.data().groups || [];
 
           // Fetch group details (e.g., names) based on group IDs
@@ -47,14 +55,34 @@ function Home() {
       return;
     }
 
+    setError(''); // Clear previous errors
+
     try {
+      // Fetch data from OMDb API
+      const response = await axios.get(`https://www.omdbapi.com/`, {
+        params: {
+          t: name.trim(),
+          apikey: process.env.REACT_APP_OMDB_API_KEY,
+        },
+      });
+
+      if (response.data.Response === 'False') {
+        setError('Title not found. Please check the name and try again.');
+        return;
+      }
+
+      const { Poster, Plot } = response.data;
+
+      // Update Firestore with the new queue item
       const userDoc = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userDoc, {
         queue: arrayUnion({
           id: new Date().getTime().toString(), // Unique ID for the item
           name: name.trim(),
           service: service.trim(),
-          // addedAt: new Date(), // Removed as per requirement
+          poster: Poster !== 'N/A' ? Poster : '', // Handle missing posters
+          description: Plot !== 'N/A' ? Plot : 'No description available.',
+          addedAt: new Date(), // Keep addedAt for sorting
         }),
       });
       setName('');
@@ -62,7 +90,7 @@ function Home() {
       setError('');
     } catch (error) {
       console.error('Error adding item to queue:', error);
-      setError('Could not add item.');
+      setError('Could not add item. Please try again.');
     }
   };
 
@@ -87,6 +115,29 @@ function Home() {
     setSelectedGroupId(groupId);
   };
 
+  // Extract unique streaming services for filtering
+  const uniqueServices = [...new Set(queue.map(item => item.service))].filter(service => service);
+
+  // Create a derived queue based on sorting and filtering, excluding watched items
+  const displayedQueue = [...queue]
+    .filter((item) => {
+      const serviceMatch = filterService === 'all' || item.service === filterService;
+      const notWatched = !watchedQueueItems.includes(item.id);
+      return serviceMatch && notWatched;
+    })
+    .sort((a, b) => {
+      if (sortOption === 'dateAsc') {
+        return new Date(a.addedAt) - new Date(b.addedAt); // Oldest first
+      } else if (sortOption === 'dateDesc') {
+        return new Date(b.addedAt) - new Date(a.addedAt); // Newest first
+      } else if (sortOption === 'serviceAsc') {
+        return a.service.localeCompare(b.service);
+      } else if (sortOption === 'serviceDesc') {
+        return b.service.localeCompare(a.service);
+      }
+      return 0;
+    });
+
   return (
     <div style={styles.container}>
       <h1>Q'd</h1>
@@ -99,6 +150,7 @@ function Home() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           style={styles.input}
+          required
         />
         <input
           type="text"
@@ -106,37 +158,60 @@ function Home() {
           value={service}
           onChange={(e) => setService(e.target.value)}
           style={styles.input}
+          required
         />
         <button type="submit" style={styles.button}>
           Add to Queue
         </button>
       </form>
 
-      <ul style={styles.ul}>
-        {queue.map((item) => (
-          <li key={item.id} style={styles.li}>
-            <div>
-              <strong>{item.name}</strong> on <em>{item.service}</em>
-            </div>
-            <button onClick={() => markAsWatched(item.id)} style={styles.button}>
-              Mark as Watched
-            </button>
-          </li>
+      {/* Sorting and Filtering Controls */}
+      <div style={styles.controlsContainer}>
+        <div style={styles.control}>
+          <label htmlFor="sort" style={styles.label}>Sort By:</label>
+          <select
+            id="sort"
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value)}
+            style={styles.select}
+          >
+            <option value="dateDesc">Date Added (Newest)</option>
+            <option value="dateAsc">Date Added (Oldest)</option>
+            <option value="serviceAsc">Streaming Service (A-Z)</option>
+            <option value="serviceDesc">Streaming Service (Z-A)</option>
+          </select>
+        </div>
+        <div style={styles.control}>
+          <label htmlFor="filter" style={styles.label}>Filter By Service:</label>
+          <select
+            id="filter"
+            value={filterService}
+            onChange={(e) => setFilterService(e.target.value)}
+            style={styles.select}
+          >
+            <option value="all">All Services</option>
+            {uniqueServices.map((service, index) => (
+              <option key={index} value={service}>{service}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Horizontally Scrollable Queue */}
+      <div style={styles.queueContainer}>
+        {displayedQueue.map((item) => (
+          <QueueItem key={item.id} item={item} markAsWatched={markAsWatched} />
         ))}
-      </ul>
+      </div>
 
       {/* Group Selection */}
       <div style={styles.groupSelection}>
         <h2>Your Groups</h2>
         {groups.length > 0 ? (
           <select onChange={handleGroupSelect} value={selectedGroupId || ''} style={styles.select}>
-            <option value="" disabled>
-              Select a group
-            </option>
+            <option value="" disabled>Select a group</option>
             {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
+              <option key={group.id} value={group.id}>{group.name}</option>
             ))}
           </select>
         ) : (
@@ -145,15 +220,18 @@ function Home() {
       </div>
 
       {/* Render Group Queue component if a group is selected */}
-      {selectedGroupId && <GroupQueue groupId={selectedGroupId} markAsWatched={markAsWatched} />}
+      {selectedGroupId && (
+        <GroupQueue groupId={selectedGroupId} markAsWatched={markAsWatched} />
+      )}
     </div>
   );
+
 }
 
 // Shared styles
 const styles = {
   container: {
-    maxWidth: '600px',
+    maxWidth: '800px',
     margin: '30px auto',
     padding: '20px',
     border: '1px solid #ddd',
@@ -182,30 +260,39 @@ const styles = {
     cursor: 'pointer',
     marginTop: '5px',
   },
-  ul: {
-    listStyle: 'none',
-    padding: 0,
-  },
-  li: {
-    padding: '10px',
-    borderBottom: '1px solid #eee',
+  controlsContainer: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: '20px',
   },
-  error: {
-    color: 'red',
+  control: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '48%',
+  },
+  label: {
+    marginBottom: '5px',
+    fontWeight: 'bold',
+    fontSize: '14px',
+  },
+  select: {
+    padding: '8px',
+    borderRadius: '3px',
+    border: '1px solid #ccc',
+    fontSize: '14px',
+  },
+  queueContainer: {
+    display: 'flex',
+    overflowX: 'auto',
+    paddingBottom: '10px',
   },
   groupSelection: {
     marginTop: '30px',
   },
-  select: {
-    padding: '10px',
-    borderRadius: '3px',
-    border: '1px solid #ccc',
-    fontSize: '16px',
-    width: '100%',
+  error: {
+    color: 'red',
   },
+  // Additional styles for QueueItem are in QueueItem.js
 };
 
 export default Home;

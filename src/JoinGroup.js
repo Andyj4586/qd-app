@@ -1,5 +1,5 @@
 // JoinGroup.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from './firebase';
 import {
   doc,
@@ -14,9 +14,10 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import GroupItem from './GroupItem'; // Import the GroupItem component
+import debounce from 'lodash.debounce'; // Import debounce
 
 function JoinGroup() {
-  const [groupIdInput, setGroupIdInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [availableGroups, setAvailableGroups] = useState([]);
@@ -34,9 +35,10 @@ function JoinGroup() {
         const groupsCollection = collection(db, 'groups');
         const q = query(groupsCollection, orderBy('createdAt', 'desc'), limit(20));
         const groupSnapshot = await getDocs(q);
-        const groupsList = groupSnapshot.docs.map(doc => ({
+        const groupsList = groupSnapshot.docs.map((doc) => ({
           id: doc.id,
           name: doc.data().name,
+          poster: doc.data().poster || '', // Ensure poster field exists
         }));
         setAvailableGroups(groupsList);
         if (groupSnapshot.docs.length > 0) {
@@ -55,6 +57,78 @@ function JoinGroup() {
     fetchInitialGroups();
   }, []);
 
+  // Debounced search function using useMemo
+  const debouncedSearch = useMemo(
+    () =>
+      debounce(async (term) => {
+        setError('');
+        setSuccess('');
+
+        if (!term.trim()) {
+          // If search term is empty, reload the initial group list
+          setLoadingGroups(true);
+          try {
+            const groupsCollection = collection(db, 'groups');
+            const q = query(groupsCollection, orderBy('createdAt', 'desc'), limit(20));
+            const groupSnapshot = await getDocs(q);
+            const groupsList = groupSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              name: doc.data().name,
+              poster: doc.data().poster || '',
+            }));
+            setAvailableGroups(groupsList);
+            setLastVisible(groupSnapshot.docs[groupSnapshot.docs.length - 1]);
+            setHasMore(groupSnapshot.docs.length === 20);
+          } catch (error) {
+            console.error('Error fetching groups:', error);
+            setError('Could not load groups. Please try again later.');
+          }
+          setLoadingGroups(false);
+          return;
+        }
+
+        // Search for groups where name contains the search term (case-insensitive)
+        setLoadingGroups(true);
+        try {
+          const groupsCollection = collection(db, 'groups');
+          // Firestore doesn't support "contains" queries directly.
+          // Implementing client-side filtering by fetching a reasonable number of groups.
+          const q = query(groupsCollection, orderBy('name'), limit(100)); // Adjust the limit as needed
+          const groupSnapshot = await getDocs(q);
+          const allGroups = groupSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            name: doc.data().name,
+            poster: doc.data().poster || '',
+          }));
+
+          const filteredGroups = allGroups.filter((group) =>
+            group.name.toLowerCase().includes(term.toLowerCase())
+          );
+
+          setAvailableGroups(filteredGroups);
+          setHasMore(false); // Assuming search results are limited
+        } catch (error) {
+          console.error('Error searching groups:', error);
+          setError('Could not search groups. Please try again later.');
+        }
+        setLoadingGroups(false);
+      }, 300),
+    []
+  );
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
+
+  // Handle searching groups by name with debouncing
+  const handleSearch = (e) => {
+    e.preventDefault();
+    debouncedSearch(searchTerm);
+  };
+
   // Handle loading more groups (pagination)
   const fetchMoreGroups = async () => {
     if (!hasMore) return;
@@ -69,11 +143,12 @@ function JoinGroup() {
         limit(20)
       );
       const groupSnapshot = await getDocs(q);
-      const groupsList = groupSnapshot.docs.map(doc => ({
+      const groupsList = groupSnapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name,
+        poster: doc.data().poster || '', // Ensure poster field exists
       }));
-      setAvailableGroups(prev => [...prev, ...groupsList]);
+      setAvailableGroups((prev) => [...prev, ...groupsList]);
       if (groupSnapshot.docs.length > 0) {
         setLastVisible(groupSnapshot.docs[groupSnapshot.docs.length - 1]);
       }
@@ -85,63 +160,6 @@ function JoinGroup() {
       setError('Could not load more groups. Please try again later.');
     }
     setLoadingGroups(false);
-  };
-
-  // Handle joining a group by ID
-  const handleJoinGroupById = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (!groupIdInput.trim()) {
-      setError('Please enter a valid Group ID.');
-      return;
-    }
-
-    setLoadingJoin(true);
-    console.log(`Attempting to join group with ID: ${groupIdInput}`); // Debug log
-
-    try {
-      const groupDocRef = doc(db, 'groups', groupIdInput);
-      const groupDocSnap = await getDoc(groupDocRef);
-
-      if (!groupDocSnap.exists()) {
-        setError('Group does not exist. Please check the Group ID.');
-        setLoadingJoin(false);
-        return;
-      }
-
-      const groupData = groupDocSnap.data();
-      const isAlreadyMember = groupData.members.includes(auth.currentUser.uid);
-      console.log(`Is already a member: ${isAlreadyMember}`); // Debug log
-
-      if (isAlreadyMember) {
-        setError('You are already a member of this group.');
-        setLoadingJoin(false);
-        return;
-      }
-
-      // Add the user to the group's members array
-      await updateDoc(groupDocRef, {
-        members: arrayUnion(auth.currentUser.uid),
-      });
-      console.log('Added user to group members array.'); // Debug log
-
-      // Add the groupId to the user's groups array
-      const userDocRef = doc(db, 'users', auth.currentUser.uid);
-      console.log(`Updating user document with group ID: ${groupIdInput}`); // Debug log
-      await updateDoc(userDocRef, {
-        groups: arrayUnion(groupIdInput),
-      });
-      console.log('Added group ID to user document.'); // Debug log
-
-      setGroupIdInput('');
-      setSuccess('Successfully joined the group!');
-    } catch (error) {
-      console.error('Error joining group:', error);
-      setError('Could not join the group. Please try again.');
-    }
-    setLoadingJoin(false);
   };
 
   // Handle joining a group from the list
@@ -193,84 +211,11 @@ function JoinGroup() {
     setLoadingJoin(false);
   };
 
-  // Handle searching groups by name
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (!searchTerm.trim()) {
-      // If search term is empty, reload the initial group list
-      setLoadingGroups(true);
-      try {
-        const groupsCollection = collection(db, 'groups');
-        const q = query(groupsCollection, orderBy('createdAt', 'desc'), limit(20));
-        const groupSnapshot = await getDocs(q);
-        const groupsList = groupSnapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name,
-        }));
-        setAvailableGroups(groupsList);
-        setLastVisible(groupSnapshot.docs[groupSnapshot.docs.length - 1]);
-        setHasMore(groupSnapshot.docs.length === 20);
-      } catch (error) {
-        console.error('Error fetching groups:', error);
-        setError('Could not load groups. Please try again later.');
-      }
-      setLoadingGroups(false);
-      return;
-    }
-
-    // Search for groups where name contains the search term (case-insensitive)
-    setLoadingGroups(true);
-    try {
-      const groupsCollection = collection(db, 'groups');
-      // Firestore doesn't support "contains" queries directly.
-      // Implementing client-side filtering by fetching a reasonable number of groups.
-      const q = query(groupsCollection, orderBy('name'), limit(100)); // Adjust the limit as needed
-      const groupSnapshot = await getDocs(q);
-      const allGroups = groupSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name,
-      }));
-
-      const filteredGroups = allGroups.filter(group =>
-        group.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-
-      setAvailableGroups(filteredGroups);
-      setHasMore(false); // Assuming search results are limited
-    } catch (error) {
-      console.error('Error searching groups:', error);
-      setError('Could not search groups. Please try again later.');
-    }
-    setLoadingGroups(false);
-  };
-
   return (
     <div style={styles.container}>
       <h2>Join a Group</h2>
       {error && <p style={styles.error}>{error}</p>}
       {success && <p style={styles.success}>{success}</p>}
-
-      {/* Join by Group ID */}
-      <div style={styles.section}>
-        <h3>Join by Group ID</h3>
-        <form onSubmit={handleJoinGroupById} style={styles.form}>
-          <input
-            type="text"
-            placeholder="Enter Group ID"
-            value={groupIdInput}
-            onChange={(e) => setGroupIdInput(e.target.value)}
-            style={styles.input}
-          />
-          <button type="submit" style={styles.button} disabled={loadingJoin}>
-            {loadingJoin ? 'Joining...' : 'Join Group'}
-          </button>
-        </form>
-      </div>
-
-      <hr style={styles.hr} />
 
       {/* Join from Available Groups */}
       <div style={styles.section}>
@@ -294,26 +239,24 @@ function JoinGroup() {
           <p>Loading groups...</p>
         ) : availableGroups.length > 0 ? (
           <>
-            <ul style={styles.ul}>
+            {/* Horizontally Scrollable Groups */}
+            <div style={styles.queueContainer}>
               {availableGroups.map((group) => (
-                <li key={group.id} style={styles.li}>
-                  <div>
-                    <strong>{group.name}</strong>
-                    <p style={styles.groupId}>ID: {group.id}</p>
-                  </div>
-                  <button
-                    onClick={() => handleJoinGroupFromList(group.id)}
-                    style={styles.joinButton}
-                    disabled={loadingJoin}
-                  >
-                    {loadingJoin ? 'Joining...' : 'Join'}
-                  </button>
-                </li>
+                <GroupItem
+                  key={group.id}
+                  group={group}
+                  onJoin={handleJoinGroupFromList}
+                  loadingJoin={loadingJoin}
+                />
               ))}
-            </ul>
+            </div>
             {/* Load More Button for Pagination */}
             {hasMore && (
-              <button onClick={fetchMoreGroups} style={styles.loadMoreButton} disabled={loadingGroups}>
+              <button
+                onClick={fetchMoreGroups}
+                style={styles.loadMoreButton}
+                disabled={loadingGroups}
+              >
                 {loadingGroups ? 'Loading...' : 'Load More'}
               </button>
             )}
@@ -326,7 +269,8 @@ function JoinGroup() {
       {/* Link to Create Group if needed */}
       <div style={styles.createLink}>
         <p>
-          Can't find the group you're looking for? <Link to="/create-group">Create a new group</Link>.
+          Can't find the group you're looking for?{' '}
+          <Link to="/create-group">Create a new group</Link>.
         </p>
       </div>
     </div>
@@ -345,11 +289,6 @@ const styles = {
   },
   section: {
     marginBottom: '30px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    marginTop: '10px',
   },
   searchForm: {
     display: 'flex',
@@ -385,6 +324,7 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     transition: 'background-color 0.3s',
+    width: '100%',
   },
   loadMoreButton: {
     padding: '10px 15px',
@@ -397,26 +337,6 @@ const styles = {
     transition: 'background-color 0.3s',
     marginTop: '15px',
   },
-  hr: {
-    margin: '20px 0',
-    border: 'none',
-    borderTop: '1px solid #ccc',
-  },
-  ul: {
-    listStyle: 'none',
-    padding: 0,
-  },
-  li: {
-    padding: '10px',
-    borderBottom: '1px solid #eee',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  groupId: {
-    fontSize: '12px',
-    color: '#555',
-  },
   error: {
     color: 'red',
     marginBottom: '15px',
@@ -428,6 +348,11 @@ const styles = {
   createLink: {
     textAlign: 'center',
     marginTop: '20px',
+  },
+  queueContainer: {
+    display: 'flex',
+    overflowX: 'auto',
+    paddingBottom: '10px',
   },
 };
 

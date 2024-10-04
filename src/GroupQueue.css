@@ -1,0 +1,78 @@
+/* GroupQueue.css */
+
+.groupQueueContainer {
+    margin-top: 30px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+  }
+  
+  .form {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+  }
+  
+  .input {
+    padding: 8px;
+    margin-bottom: 10px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+  }
+  
+  .button {
+    padding: 8px;
+    border-radius: 3px;
+    border: none;
+    background-color: #007BFF;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  
+  .error {
+    color: red;
+  }
+  
+  .controlsContainer {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  
+  .control {
+    display: flex;
+    flex-direction: column;
+    width: 48%;
+  }
+  
+  .label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  
+  .select {
+    padding: 8px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+  }
+  
+  .queueContainer {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+  
+  /* Optional: Hide scrollbar for cleaner look */
+  .queueContainer::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .queueContainer {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
