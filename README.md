@@ -1,4 +1,7 @@
-# Getting Started with Create React App
+# Qd
+Qd is an app for keeping track of what content you'd like to watch, sort of a combined watchlist for everything you'd like to watch across all of your different streaming services. You can add items to your personal queue or create a group queue with your friends. 
+
+## Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
